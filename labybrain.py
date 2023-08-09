@@ -144,9 +144,12 @@ if __name__ == "__main__":
     max_model_id = 0
     for filename in os.listdir('models'):
         if filename.startswith('model_') and filename.endswith('.keras'):
-            model_id = int(filename[6:-6])
-            if model_id > max_model_id:
-                max_model_id = model_id
+            try:
+                model_id = int(filename[6:-6])
+                if model_id > max_model_id:
+                    max_model_id = model_id
+            except:
+                pass
     model_id = max_model_id + 1
     four_digit_model_id = str(model_id).zfill(4)
     model_filename = 'models/model_' + four_digit_model_id + '.keras'
