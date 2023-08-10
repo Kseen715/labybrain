@@ -7,7 +7,11 @@ from tensorflow import keras
 import tensorflow as tf
 import json
 import os
+import argparse
+import sys
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+log_mode = enumerate(['QUIET', 'INFO', 'WARNING', 'ERROR', 'DEBUG'])
 
 
 class Global_vars:
@@ -69,16 +73,18 @@ def import_train_data(filename: str):
         lb_logger.log_error("Failed to import train data: " + str(e))
 
 
-def load_model(model_filename: str):
+def load_model(model_filename: str, log_mode: log_mode = 0):
     '''
     Loads the model from model.keras.
     '''
     try:
         global_vars.model = keras.models.load_model(model_filename)
-        lb_logger.log_info("Model " + model_filename + " loaded.")
+        if log_mode >= 1:
+            lb_logger.log_info("Model " + model_filename + " loaded.")
         return global_vars.model
     except Exception as e:
-        lb_logger.log_error("Failed to load model: " + str(e))
+        if log_mode >= 3:
+            lb_logger.log_error("Failed to load model: " + str(e))
 
 
 def predict(predict_pd: pd.DataFrame):
@@ -117,7 +123,7 @@ def insert_randomity(randomness: float, predict_pd: pd.DataFrame):
     return local_pr_pd
 
 
-if __name__ == "__main__":
+def train(log_mode: log_mode = 0):
     train_data, train_labels = import_train_data("train_data.csv")
     # lb_logger.log_info("Train data: " + str(train_data))
     # lb_logger.log_info("Train labels: " + str(train_labels))
@@ -128,17 +134,23 @@ if __name__ == "__main__":
         keras.layers.Dense(6, activation='sigmoid'),
         # keras.layers.Dense(6)
     ])
+    epoch_count = 1000
 
     model.compile(optimizer='adam',
                   loss='binary_crossentropy', metrics=['accuracy'])
 
-    model.fit(train_data, train_labels, epochs=1000,
-              verbose=0, callbacks=[TqdmCallback(verbose=1)])
+    verbosity = 0
+    if log_mode >= 1:
+        lb_logger.log_info('Training...')
+        verbosity = 1
+    model.fit(train_data, train_labels, epochs=epoch_count,
+              verbose=0, callbacks=[TqdmCallback(verbose=verbosity)])
 
     test_loss, test_acc = model.evaluate(train_data,  train_labels, verbose=0)
 
-    lb_logger.log_info('Test accuracy: {}'.format(test_acc))
-    lb_logger.log_info('Test loss: {}'.format(test_loss))
+    if log_mode >= 1:
+        lb_logger.log_info('Test accuracy: {}'.format(test_acc))
+        lb_logger.log_info('Test loss: {}'.format(test_loss))
 
     # save model
     max_model_id = 0
@@ -154,40 +166,74 @@ if __name__ == "__main__":
     four_digit_model_id = str(model_id).zfill(4)
     model_filename = 'models/model_' + four_digit_model_id + '.keras'
     model.save(model_filename)
-    lb_logger.log_info('Model saved as ' + model_filename)
+    if log_mode >= 1:
+        lb_logger.log_info('Model saved as ' + model_filename)
 
-    # print(predict())
-    # test_pd0 = pd.DataFrame([[0, 0, 0, 0, 0, 0]], columns=train_data.columns)
-    # prediction = model.predict(test_pd0)[0]
-    # print('0: ' + str(prediction) + '\t' + str(max(prediction)) + '\t' +
-    #       str(np.where(np.isclose(prediction, max(prediction)))[0] + 1))
 
-    # test_pd1 = pd.DataFrame([[1, 0, 0, 0, 0, 0]], columns=train_data.columns)
-    # prediction = model.predict(test_pd1)[0]
-    # print('1: ' + str(prediction) + '\t' + str(max(prediction)) + '\t' +
-    #       str(np.where(np.isclose(prediction, max(prediction)))[0] + 1))
+def EXIT(log_mode: log_mode = 3):
+    if log_mode >= 3:
+        lb_logger.log_warning('Force exiting...\n\n\n\n')
+    raise SystemExit
 
-    # test_pd2 = pd.DataFrame([[0, 1, 0, 0, 0, 0]], columns=train_data.columns)
-    # prediction = model.predict(test_pd2)[0]
-    # print('2: ' + str(prediction) + '\t' + str(max(prediction)) + '\t' +
-    #       str(np.where(np.isclose(prediction, max(prediction)))[0] + 1))
 
-    # test_pd3 = pd.DataFrame([[0, 0, 1, 0, 0, 0]], columns=train_data.columns)
-    # prediction = model.predict(test_pd3)[0]
-    # print('3: ' + str(prediction) + '\t' + str(max(prediction)) + '\t' +
-    #       str(np.where(np.isclose(prediction, max(prediction)))[0] + 1))
+def load_model_callback(model_id: str, log_mode: log_mode = 0):
+    try:
+        global_vars.model_filename = "models/model_" + model_id + ".keras"
+        load_model(global_vars.model_filename, log_mode)
+    except Exception as e:
+        if log_mode >= 3:
+            lb_logger.log_error("Failed to load model: " + str(e))
 
-    # test_pd4 = pd.DataFrame([[0, 0, 0, 1, 0, 0]], columns=train_data.columns)
-    # prediction = model.predict(test_pd4)[0]
-    # print('4: ' + str(prediction) + '\t' + str(max(prediction)) + '\t' +
-    #       str(np.where(np.isclose(prediction, max(prediction)))[0] + 1))
 
-    # test_pd5 = pd.DataFrame([[0, 0, 0, 0, 1, 0]], columns=train_data.columns)
-    # prediction = model.predict(test_pd5)[0]
-    # print('5: ' + str(prediction) + '\t' + str(max(prediction)) + '\t' +
-    #       str(np.where(np.isclose(prediction, max(prediction)))[0] + 1))
+def predict_callback(log_mode: log_mode = 0):
+    '''
+    Predicts the result based on config.
+    '''
+    try:
+        if log_mode < 4:
+            tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+        predict_pd = pd.DataFrame([[global_vars.config["dir_1"],
+                                    global_vars.config["dir_2"],
+                                    global_vars.config["dir_3"],
+                                    global_vars.config["dir_4"],
+                                    global_vars.config["dir_5"],
+                                    global_vars.config["dir_6"]]],
+                                  columns=['dir_1', 'dir_2',
+                                           'dir_3', 'dir_4',
+                                           'dir_5', 'dir_6'])
 
-    # test_pd6 = pd.DataFrame([[0, 0, 0, 0, 0, 1]], columns=train_data.columns)
-    # prediction = model.predict(test_pd6)[0]
-    # print('6: ' + str(prediction) + '\t' + str(max(prediction)) + '\t' +
-    #       str(np.where(np.isclose(prediction, max(prediction)))[0] + 1))
+        prediction, max_prediction, prediction_id = predict(
+            insert_randomity(global_vars.config['randomness'],
+                             predict_pd))
+
+        prdt_str = ''
+        for i in range(len(prediction)):
+            prdt_str += str(i) + ': ' + str(prediction[i])
+            if i != len(prediction) - 1:
+                prdt_str += '\n'
+
+        if log_mode >= 4:
+            lb_logger.log_info("Predicted result for\n" +
+                               'MDL: ' + global_vars.model_filename)
+            lb_logger.log_info('INPT:\n' + str(predict_pd))
+            lb_logger.log_info('PRDT:\n' + prdt_str)
+
+        if log_mode >= 1:
+            lb_logger.log("RSLT: " + str(prediction_id) +
+                          ' (' + str(max_prediction) + ')')
+
+        return prediction_id
+    except Exception as e:
+        if log_mode >= 3:
+            lb_logger.log_error("Failed to predict: " + str(e))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-p", "--intpath",
+                        action="Add path to Python's internal path.",
+                        default="")
+    args = parser.parse_args()
+    if args.intpath != "":
+        sys.path.append(args.intpath)
+    train()
