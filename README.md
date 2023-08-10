@@ -7,5 +7,5 @@
 Labybrain is a simple TF neural network to define sud-random direction for 4D-maze solving. Written in Python 3.11.
 
 ## Used in
-- [Labybrain-CS](https://github.com/Kseen715/labybrain-cs)
+- [Labybrain-CS](https://github.com/Kseen715/labybrain-cs) - C# implementation of Labybrain
 - TIA - game from BSTU about maze in the real BSTU main building
