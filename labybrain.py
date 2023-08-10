@@ -1,7 +1,6 @@
 from logger import LB_Logger
 from tqdm.keras import TqdmCallback
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
 from tensorflow import keras
 import tensorflow as tf
