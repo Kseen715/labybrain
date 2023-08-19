@@ -1,5 +1,6 @@
 from logger import LB_Logger
 from tqdm.keras import TqdmCallback
+import tqdm
 import pandas as pd
 import numpy as np
 from tensorflow import keras
@@ -86,11 +87,11 @@ def load_model(model_filename: str, log_mode: log_mode = 0):
             lb_logger.log_error("Failed to load model: " + str(e))
 
 
-def predict(predict_pd: pd.DataFrame):
+def predict(predict_pd: pd.DataFrame, verbose: int = 1):
     '''
     Predicts the result based on config.
     '''
-    prediction = global_vars.model.predict(predict_pd)[0]
+    prediction = global_vars.model.predict(predict_pd, verbose=verbose)[0]
     max_prediction = max(prediction)
     # prediction_id = np.where(prediction, max(prediction))[0] + 1
     prediction_id = np.where(np.isclose(prediction, max(prediction)))[0] + 1
@@ -227,12 +228,53 @@ def predict_callback(log_mode: log_mode = 0):
             lb_logger.log_error("Failed to predict: " + str(e))
 
 
+def predict_callback_mult(count: int, log_mode: log_mode = 0):
+    '''
+    Predicts the result based on config.
+    '''
+    try:
+        if log_mode < 4:
+            tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+        predict_pd = pd.DataFrame([[global_vars.config["dir_1"],
+                                    global_vars.config["dir_2"],
+                                    global_vars.config["dir_3"],
+                                    global_vars.config["dir_4"],
+                                    global_vars.config["dir_5"],
+                                    global_vars.config["dir_6"]]],
+                                  columns=['dir_1', 'dir_2',
+                                           'dir_3', 'dir_4',
+                                           'dir_5', 'dir_6'])
+
+        result_ids = []
+        for i in tqdm.tqdm(range(count), unit='predictions', desc='Predicting'):
+            result_ids.append(predict(
+                insert_randomity(global_vars.config['randomness'],
+                                 predict_pd), verbose=0)[2])
+
+        if log_mode >= 4:
+            lb_logger.log_info("Predicted result for\n" +
+                               'MDL: ' + global_vars.model_filename)
+            lb_logger.log_info('INPT:\n' + str(predict_pd))
+
+        if log_mode >= 1:
+            lb_logger.log("RSLT: " + str(result_ids))
+
+        return result_ids
+    except Exception as e:
+        if log_mode >= 3:
+            lb_logger.log_error("Failed to predict: " + str(e))
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--intpath",
-                        action="Add path to Python's internal path.",
-                        default="")
-    args = parser.parse_args()
-    if args.intpath != "":
-        sys.path.append(args.intpath)
-    train()
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("-p", "--intpath",
+    #                     action="Add path to Python's internal path.",
+    #                     default="")
+    # args = parser.parse_args()
+    # if args.intpath != "":
+    #     sys.path.append(args.intpath)
+    # train()
+
+    load_config()
+    load_model_callback("0004")
+    predict_callback_mult(100, 4)
