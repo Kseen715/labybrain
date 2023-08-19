@@ -11,7 +11,14 @@ import argparse
 import sys
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-log_mode = enumerate(['QUIET', 'INFO', 'WARNING', 'ERROR', 'DEBUG'])
+
+
+class Log_mode:
+    DEBUG = 0
+    INFO = 1
+    WARNING = 2
+    ERROR = 3
+    QUIET = 4
 
 
 class Global_vars:
@@ -32,37 +39,42 @@ global_vars = Global_vars()
 lb_logger = LB_Logger()
 
 
-def load_config():
+def load_config(log_mode=Log_mode.INFO):
     '''
     Loads config from config.json.
     '''
     try:
         with open("config.json", "r") as f:
             global_vars.config = json.load(f)
-        lb_logger.log_info("Config loaded.")
+        if log_mode <= Log_mode.INFO:
+            lb_logger.log_info("Config loaded.")
     except Exception as e:
-        lb_logger.log_error("Failed to load config.json: " + str(e))
+        if log_mode <= Log_mode.ERROR:
+            lb_logger.log_error("Failed to load config.json: " + str(e))
 
 
-def save_config():
+def save_config(log_mode=Log_mode.INFO):
     '''
     Saves config to config.json.
     '''
     try:
         with open("config.json", "w") as f:
             json.dump(global_vars.config, f)
-        lb_logger.log_info("Config saved.")
+        if log_mode <= Log_mode.INFO:
+            lb_logger.log_info("Config saved.")
     except Exception as e:
-        lb_logger.log_error("Failed to save config.json: " + str(e))
+        if log_mode <= Log_mode.ERROR:
+            lb_logger.log_error("Failed to save config.json: " + str(e))
 
 
-def import_train_data(filename: str):
+def import_train_data(filename: str, log_mode=Log_mode.INFO):
     '''
     Imports train data from train_data.csv.
     '''
     try:
         train_data = pd.read_csv(filename)
-        lb_logger.log_info("Train data imported.")
+        if log_mode <= Log_mode.INFO:
+            lb_logger.log_info("Train data imported.")
         # chop off the last column and save it as labels
         train_labels = train_data.pop('result')
         # convert every label to a one-hot vector
@@ -70,20 +82,21 @@ def import_train_data(filename: str):
         train_labels = tf.one_hot(train_labels, depth=6)
         return train_data, train_labels
     except Exception as e:
-        lb_logger.log_error("Failed to import train data: " + str(e))
+        if log_mode <= Log_mode.ERROR:
+            lb_logger.log_error("Failed to import train data: " + str(e))
 
 
-def load_model(model_filename: str, log_mode: log_mode = 0):
+def load_model(model_filename: str, log_mode=Log_mode.INFO):
     '''
     Loads the model from model.keras.
     '''
     try:
         global_vars.model = keras.models.load_model(model_filename)
-        if log_mode >= 1:
+        if log_mode <= Log_mode.INFO:
             lb_logger.log_info("Model " + model_filename + " loaded.")
         return global_vars.model
     except Exception as e:
-        if log_mode >= 3:
+        if log_mode <= Log_mode.ERROR:
             lb_logger.log_error("Failed to load model: " + str(e))
 
 
@@ -98,12 +111,6 @@ def predict(predict_pd: pd.DataFrame, verbose: int = 1):
     # if prediction_id is list:
     prediction_id = prediction_id[0]
     return prediction, max_prediction, prediction_id
-    # ('MDL: ' + global_vars.model_filename + '\n' +
-    #         'INPT:\n' +
-    #         str(predict_pd) + '\n' +
-    #         'PRDT: ' + str(prediction) + '\n' +
-    #         'RSLT: ' + str(max_prediction) + ' == ' +
-    #         str(prediction_id))
 
 
 def insert_randomity(randomness: float, predict_pd: pd.DataFrame):
@@ -123,7 +130,7 @@ def insert_randomity(randomness: float, predict_pd: pd.DataFrame):
     return local_pr_pd
 
 
-def train(log_mode: log_mode = 0):
+def train(log_mode=Log_mode.INFO):
     train_data, train_labels = import_train_data("train_data.csv")
     # lb_logger.log_info("Train data: " + str(train_data))
     # lb_logger.log_info("Train labels: " + str(train_labels))
@@ -139,16 +146,19 @@ def train(log_mode: log_mode = 0):
     model.compile(optimizer='adam',
                   loss='binary_crossentropy', metrics=['accuracy'])
 
-    verbosity = 0
-    if log_mode >= 1:
+    verbosity = 1
+    if log_mode <= Log_mode.INFO:
         lb_logger.log_info('Training...')
-        verbosity = 1
+
+    if log_mode == Log_mode.QUIET:
+        verbosity = 0
+
     model.fit(train_data, train_labels, epochs=epoch_count,
               verbose=0, callbacks=[TqdmCallback(verbose=verbosity)])
 
     test_loss, test_acc = model.evaluate(train_data,  train_labels, verbose=0)
 
-    if log_mode >= 1:
+    if log_mode <= Log_mode.INFO:
         lb_logger.log_info('Test accuracy: {}'.format(test_acc))
         lb_logger.log_info('Test loss: {}'.format(test_loss))
 
@@ -162,35 +172,36 @@ def train(log_mode: log_mode = 0):
                     max_model_id = model_id
             except:
                 pass
+
     model_id = max_model_id + 1
     four_digit_model_id = str(model_id).zfill(4)
     model_filename = 'models/model_' + four_digit_model_id + '.keras'
     model.save(model_filename)
-    if log_mode >= 1:
+    if log_mode <= Log_mode.INFO:
         lb_logger.log_info('Model saved as ' + model_filename)
 
 
-def EXIT(log_mode: log_mode = 3):
-    if log_mode >= 3:
+def EXIT(log_mode=Log_mode.INFO):
+    if log_mode <= Log_mode.WARNING:
         lb_logger.log_warning('Force exiting...\n\n\n\n')
     raise SystemExit
 
 
-def load_model_callback(model_id: str, log_mode: log_mode = 0):
+def load_model_callback(model_id: str, log_mode=Log_mode.INFO):
     try:
         global_vars.model_filename = "models/model_" + model_id + ".keras"
         load_model(global_vars.model_filename, log_mode)
     except Exception as e:
-        if log_mode >= 3:
+        if log_mode <= Log_mode.ERROR:
             lb_logger.log_error("Failed to load model: " + str(e))
 
 
-def predict_callback(log_mode: log_mode = 0):
+def predict_callback(log_mode=Log_mode.INFO):
     '''
     Predicts the result based on config.
     '''
     try:
-        if log_mode < 4:
+        if log_mode == Log_mode.QUIET:
             tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
         predict_pd = pd.DataFrame([[global_vars.config["dir_1"],
                                     global_vars.config["dir_2"],
@@ -212,28 +223,28 @@ def predict_callback(log_mode: log_mode = 0):
             if i != len(prediction) - 1:
                 prdt_str += '\n'
 
-        if log_mode >= 4:
+        if log_mode <= Log_mode.INFO:
             lb_logger.log_info("Predicted result for\n" +
                                'MDL: ' + global_vars.model_filename)
             lb_logger.log_info('INPT:\n' + str(predict_pd))
             lb_logger.log_info('PRDT:\n' + prdt_str)
 
-        if log_mode >= 1:
+        if log_mode <= Log_mode.DEBUG:
             lb_logger.log("RSLT: " + str(prediction_id) +
                           ' (' + str(max_prediction) + ')')
 
         return prediction_id
     except Exception as e:
-        if log_mode >= 3:
+        if log_mode <= Log_mode.ERROR:
             lb_logger.log_error("Failed to predict: " + str(e))
 
 
-def predict_callback_mult(count: int, log_mode: log_mode = 0):
+def predict_callback_mult(count: int, log_mode=Log_mode.INFO):
     '''
     Predicts the result based on config.
     '''
     try:
-        if log_mode < 4:
+        if log_mode == Log_mode.QUIET:
             tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
         predict_pd = pd.DataFrame([[global_vars.config["dir_1"],
                                     global_vars.config["dir_2"],
@@ -246,22 +257,22 @@ def predict_callback_mult(count: int, log_mode: log_mode = 0):
                                            'dir_5', 'dir_6'])
 
         result_ids = []
-        for i in tqdm.tqdm(range(count), unit='predictions', desc='Predicting'):
+        for i in tqdm.tqdm(range(count), unit='predictions', desc='Predicting')\
+                if log_mode <= Log_mode.INFO else range(count):
             result_ids.append(predict(
                 insert_randomity(global_vars.config['randomness'],
                                  predict_pd), verbose=0)[2])
 
-        if log_mode >= 4:
+        if log_mode <= Log_mode.INFO:
             lb_logger.log_info("Predicted result for\n" +
                                'MDL: ' + global_vars.model_filename)
             lb_logger.log_info('INPT:\n' + str(predict_pd))
-
-        if log_mode >= 1:
-            lb_logger.log("RSLT: " + str(result_ids))
+            lb_logger.log_info(
+                'RND: ' + str(global_vars.config['randomness']))
 
         return result_ids
     except Exception as e:
-        if log_mode >= 3:
+        if log_mode <= Log_mode.ERROR:
             lb_logger.log_error("Failed to predict: " + str(e))
 
 
